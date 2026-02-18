@@ -98,7 +98,7 @@ export default function CorrecaoRapida() {
     setSaving(true);
     try {
       await api.post('/ocorrencias', {
-        relatorio_final: textoCorrigido || textoBruto,
+        relatorio_final: textoCorrigido,
         condominio_id: parseInt(selectedCondominio),
         ocorrencia_tipo_id: parseInt(selectedTipo),
         status: 'Registrada',
@@ -220,7 +220,7 @@ export default function CorrecaoRapida() {
               <Wand2 className="mr-2 h-4 w-4" /> Corrigir
           </Button>
 
-          {(textoCorrigido || textoBruto) && (
+          {(textoCorrigido) && (
              <Button 
                variant="outline"
                onClick={() => setShowSaveModal(true)}
