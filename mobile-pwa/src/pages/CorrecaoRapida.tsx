@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { ArrowLeft, Wand2, Copy, MessageCircle, CheckCircle } from 'lucide-react';
@@ -19,6 +19,20 @@ export default function CorrecaoRapida() {
   const [tipos, setTipos] = useState<{id: number, nome: string}[]>([]);
   const [selectedCondominio, setSelectedCondominio] = useState('');
   const [selectedTipo, setSelectedTipo] = useState('');
+
+  // Ref para controlar a primeira renderização e não limpar o estado salvo
+  const isFirstRender = useRef(true);
+
+  // Limpar o resultado se o texto original for alterado (para evitar salvar dados inconsistentes)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (textoCorrigido) {
+      setTextoCorrigido('');
+    }
+  }, [textoBruto]);
 
   // Persistência: Salvar no localStorage sempre que mudar
   // O carregamento inicial já foi feito no useState acima
@@ -205,7 +219,10 @@ export default function CorrecaoRapida() {
             <textarea
                 className="w-full p-4 h-32 resize-none border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 value={textoBruto}
-                onChange={(e) => setTextoBruto(e.target.value)}
+                onChange={(e) => {
+                  setTextoBruto(e.target.value);
+                  if (textoCorrigido) setTextoCorrigido('');
+                }}
                 placeholder="Cole ou digite o texto bagunçado aqui..."
                 disabled={loading}
             />
@@ -215,7 +232,7 @@ export default function CorrecaoRapida() {
           <Button 
               onClick={handleCorrigir} 
               isLoading={loading}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
+              className={`bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md ${!textoCorrigido ? 'col-span-2' : ''}`}
           >
               <Wand2 className="mr-2 h-4 w-4" /> Corrigir
           </Button>
