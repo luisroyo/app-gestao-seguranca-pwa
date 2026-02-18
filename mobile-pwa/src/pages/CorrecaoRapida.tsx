@@ -237,15 +237,7 @@ export default function CorrecaoRapida() {
               <Wand2 className="mr-2 h-4 w-4" /> Corrigir
           </Button>
 
-          {(textoCorrigido) && (
-             <Button 
-               variant="outline"
-               onClick={() => setShowSaveModal(true)}
-               className="border-green-600 text-green-700 hover:bg-green-50"
-             >
-               Salvar no Sistema
-             </Button>
-          )}
+
         </div>
 
         {textoCorrigido && (
@@ -269,6 +261,14 @@ export default function CorrecaoRapida() {
                   <Button variant="primary" onClick={handleWhatsApp} className="flex flex-col h-auto py-3 gap-1 bg-green-600 hover:bg-green-700 border-none">
                     <MessageCircle className="h-5 w-5 text-white" />
                     <span className="text-xs font-normal">WhatsApp</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    onClick={() => setShowSaveModal(true)}
+                    className="col-span-2 border-green-600 text-green-700 hover:bg-green-50 flex items-center justify-center gap-2 py-3"
+                  >
+                    Salvar no Sistema
                   </Button>
                 </div>
             </div>
