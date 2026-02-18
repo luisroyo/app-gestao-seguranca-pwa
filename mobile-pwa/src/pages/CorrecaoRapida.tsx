@@ -9,6 +9,12 @@ export default function CorrecaoRapida() {
   // Inicialização lazy do estado lendo direto do localStorage para evitar race condition
   const [textoBruto, setTextoBruto] = useState(() => localStorage.getItem('correcao_bruto') || '');
   const [textoCorrigido, setTextoCorrigido] = useState(() => localStorage.getItem('correcao_corrigido') || '');
+  
+  // Se já tiver texto corrigido salvo, inicia na etapa de resultado
+  const [step, setStep] = useState<'input' | 'result'>(() => {
+    return localStorage.getItem('correcao_corrigido') ? 'result' : 'input';
+  });
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -31,18 +37,23 @@ export default function CorrecaoRapida() {
     }
     if (textoCorrigido) {
       setTextoCorrigido('');
+      // Se limpou o texto corrigido (por edição no bruto), volta para input se estiver no result?
+      // Melhor manter a UI consistente: se o usuário voltar para input e editar, o result limpa silenciosamente.
+      // Se ele estava em 'result' e editou (impossível pela UI atual, mas por segurança), forçamos input:
+      // MAS, como estamos separando em telas, o usuário só edita o bruto na tela 'input'.
     }
   }, [textoBruto]);
 
   // Persistência: Salvar no localStorage sempre que mudar
   // O carregamento inicial já foi feito no useState acima
-
   useEffect(() => {
     localStorage.setItem('correcao_bruto', textoBruto);
   }, [textoBruto]);
 
   useEffect(() => {
     localStorage.setItem('correcao_corrigido', textoCorrigido);
+    // Sincroniza o step se recarregar a página com dados
+    // (Não necessário aqui pois inicializamos o step checkando o localStorage)
   }, [textoCorrigido]);
 
   // Carregar dados para o modal
@@ -83,6 +94,7 @@ export default function CorrecaoRapida() {
       
       const { relatorio_processado } = response.data.data || response.data;
       setTextoCorrigido(relatorio_processado);
+      setStep('result'); // Avança para a tela de resultado
       setMessage('Texto corrigido pela IA!');
     } catch (error) {
       console.error('Erro na correção:', error);
@@ -96,11 +108,17 @@ export default function CorrecaoRapida() {
     if (window.confirm('Tem certeza que deseja limpar tudo?')) {
       setTextoBruto('');
       setTextoCorrigido('');
+      setStep('input');
       localStorage.removeItem('correcao_bruto');
       localStorage.removeItem('correcao_corrigido');
       setMessage('Tudo limpo!');
       setTimeout(() => setMessage(''), 3000);
     }
+  };
+
+  const handleVoltar = () => {
+      setStep('input');
+      setMessage('');
   };
 
   const handleSalvar = async () => {
@@ -121,7 +139,7 @@ export default function CorrecaoRapida() {
       
       setMessage('Ocorrência salva com sucesso!');
       setShowSaveModal(false);
-      // Limpar após salvar? Opcional. Vamos manter por segurança.
+      // Opcional: Limpar após sucesso ou manter para referência?
       // handleLimpar(); 
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
@@ -150,7 +168,9 @@ export default function CorrecaoRapida() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-gray-900">Correção Mágica ✨</h1>
+          <h1 className="text-lg font-bold text-gray-900">
+            {step === 'input' ? 'Correção Mágica ✨' : 'Resultado da IA 🤖'}
+          </h1>
         </div>
         <Button variant="ghost" size="sm" onClick={handleLimpar} className="text-red-500 text-xs">
           Limpar
@@ -214,38 +234,47 @@ export default function CorrecaoRapida() {
           </div>
         )}
 
-        <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Texto Original</label>
-            <textarea
-                className="w-full p-4 h-32 resize-none border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                value={textoBruto}
-                onChange={(e) => {
-                  setTextoBruto(e.target.value);
-                  if (textoCorrigido) setTextoCorrigido('');
-                }}
-                placeholder="Cole ou digite o texto bagunçado aqui..."
-                disabled={loading}
-            />
-        </div>
+        {/* STEP 1: INPUT */}
+        {step === 'input' && (
+          <>
+            <div className="space-y-2 flex-1 flex flex-col">
+                <label className="text-sm font-medium text-gray-700">Texto Original</label>
+                <textarea
+                    className="w-full p-4 h-full min-h-[50vh] resize-none border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none flex-1"
+                    value={textoBruto}
+                    onChange={(e) => {
+                      setTextoBruto(e.target.value);
+                      // O useEffect limpará o textoCorrigido/Step se necessário, mas aqui só estamos editando o bruto.
+                      // Se o usuário voltar para cá, ele edita o bruto.
+                    }}
+                    placeholder="Cole ou digite o texto bagunçado aqui... Ex: rond realizada tudo qap cond alpha portaria ok"
+                    disabled={loading}
+                />
+            </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Button 
-              onClick={handleCorrigir} 
-              isLoading={loading}
-              className={`bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md ${!textoCorrigido ? 'col-span-2' : ''}`}
-          >
-              <Wand2 className="mr-2 h-4 w-4" /> Corrigir
-          </Button>
+            <Button 
+                onClick={handleCorrigir} 
+                isLoading={loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md py-4 text-lg"
+            >
+                <Wand2 className="mr-2 h-5 w-5" /> Corrigir Agora
+            </Button>
+          </>
+        )}
 
+        {/* STEP 2: RESULTADO */}
+        {step === 'result' && (
+            <div className="flex-1 flex flex-col gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-medium text-green-700 flex items-center gap-2">
+                      <Wand2 className="h-4 w-4" /> Texto Melhorado
+                  </label>
+                  <button onClick={handleVoltar} className="text-sm text-gray-500 hover:text-gray-800 underline">
+                    Editar Original
+                  </button>
+                </div>
 
-        </div>
-
-        {textoCorrigido && (
-            <div className="flex-1 flex flex-col gap-2 mt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <label className="text-sm font-medium text-green-700 flex items-center gap-2">
-                    <Wand2 className="h-3 w-3" /> Resultado
-                </label>
-                <div className="bg-white p-1 rounded-xl shadow-sm border border-green-200 flex-1 flex flex-col">
+                <div className="bg-white p-1 rounded-xl shadow-sm border border-green-200 flex-1 flex flex-col min-h-[40vh]">
                     <textarea
                         className="flex-1 w-full p-4 resize-none focus:outline-none text-base leading-relaxed text-gray-800 rounded-xl bg-green-50/30"
                         value={textoCorrigido}
@@ -253,20 +282,22 @@ export default function CorrecaoRapida() {
                     />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pb-4">
-                  <Button variant="outline" onClick={handleCopy} className="flex flex-col h-auto py-3 gap-1 bg-white border-gray-200">
-                    <Copy className="h-5 w-5 text-gray-600" />
-                    <span className="text-xs font-normal">Copiar</span>
-                  </Button>
-                  <Button variant="primary" onClick={handleWhatsApp} className="flex flex-col h-auto py-3 gap-1 bg-green-600 hover:bg-green-700 border-none">
-                    <MessageCircle className="h-5 w-5 text-white" />
-                    <span className="text-xs font-normal">WhatsApp</span>
-                  </Button>
+                <div className="space-y-3 pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" onClick={handleCopy} className="flex flex-col h-auto py-3 gap-1 bg-white border-gray-200">
+                      <Copy className="h-5 w-5 text-gray-600" />
+                      <span className="text-xs font-normal">Copiar</span>
+                    </Button>
+                    <Button variant="primary" onClick={handleWhatsApp} className="flex flex-col h-auto py-3 gap-1 bg-green-600 hover:bg-green-700 border-none">
+                      <MessageCircle className="h-5 w-5 text-white" />
+                      <span className="text-xs font-normal">WhatsApp</span>
+                    </Button>
+                  </div>
                   
                   <Button 
                     variant="outline"
                     onClick={() => setShowSaveModal(true)}
-                    className="col-span-2 border-green-600 text-green-700 hover:bg-green-50 flex items-center justify-center gap-2 py-3"
+                    className="w-full border-green-600 text-green-700 hover:bg-green-50 flex items-center justify-center gap-2 py-4 font-medium"
                   >
                     Salvar no Sistema
                   </Button>
