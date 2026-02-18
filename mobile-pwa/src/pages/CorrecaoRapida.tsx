@@ -6,8 +6,9 @@ import api from '../lib/api';
 
 export default function CorrecaoRapida() {
   const navigate = useNavigate();
-  const [textoBruto, setTextoBruto] = useState('');
-  const [textoCorrigido, setTextoCorrigido] = useState('');
+  // Inicialização lazy do estado lendo direto do localStorage para evitar race condition
+  const [textoBruto, setTextoBruto] = useState(() => localStorage.getItem('correcao_bruto') || '');
+  const [textoCorrigido, setTextoCorrigido] = useState(() => localStorage.getItem('correcao_corrigido') || '');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -19,13 +20,8 @@ export default function CorrecaoRapida() {
   const [selectedCondominio, setSelectedCondominio] = useState('');
   const [selectedTipo, setSelectedTipo] = useState('');
 
-  // Persistência Local
-  useEffect(() => {
-    const savedBruto = localStorage.getItem('correcao_bruto');
-    const savedCorrigido = localStorage.getItem('correcao_corrigido');
-    if (savedBruto) setTextoBruto(savedBruto);
-    if (savedCorrigido) setTextoCorrigido(savedCorrigido);
-  }, []);
+  // Persistência: Salvar no localStorage sempre que mudar
+  // O carregamento inicial já foi feito no useState acima
 
   useEffect(() => {
     localStorage.setItem('correcao_bruto', textoBruto);
