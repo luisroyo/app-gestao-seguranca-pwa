@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { ArrowLeft, Wand2, Copy, MessageCircle, CheckCircle } from 'lucide-react';
@@ -9,7 +9,52 @@ export default function CorrecaoRapida() {
   const [textoBruto, setTextoBruto] = useState('');
   const [textoCorrigido, setTextoCorrigido] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  
+  // Modal state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [condominios, setCondominios] = useState<{id: number, nome: string}[]>([]);
+  const [tipos, setTipos] = useState<{id: number, nome: string}[]>([]);
+  const [selectedCondominio, setSelectedCondominio] = useState('');
+  const [selectedTipo, setSelectedTipo] = useState('');
+
+  // Persistência Local
+  useEffect(() => {
+    const savedBruto = localStorage.getItem('correcao_bruto');
+    const savedCorrigido = localStorage.getItem('correcao_corrigido');
+    if (savedBruto) setTextoBruto(savedBruto);
+    if (savedCorrigido) setTextoCorrigido(savedCorrigido);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('correcao_bruto', textoBruto);
+  }, [textoBruto]);
+
+  useEffect(() => {
+    localStorage.setItem('correcao_corrigido', textoCorrigido);
+  }, [textoCorrigido]);
+
+  // Carregar dados para o modal
+  useEffect(() => {
+    if (showSaveModal) {
+      fetchDadosModal();
+    }
+  }, [showSaveModal]);
+
+  const fetchDadosModal = async () => {
+    try {
+      const [condRes, tiposRes] = await Promise.all([
+        api.get('/ocorrencias/condominios'),
+        api.get('/ocorrencias/tipos')
+      ]);
+      setCondominios(condRes.data.data.condominios || []);
+      setTipos(tiposRes.data.data.tipos || []);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      setMessage('Erro ao carregar opções para salvar.');
+    }
+  };
 
   const handleCorrigir = async () => {
     if (!textoBruto.trim()) {
@@ -19,14 +64,14 @@ export default function CorrecaoRapida() {
     
     setLoading(true);
     setMessage('');
-    setTextoCorrigido(''); // Limpa anterior
+    setTextoCorrigido('');
 
     try {
       const response = await api.post('/analisador/processar-relatorio', {
         relatorio_bruto: textoBruto
       });
       
-      const { relatorio_processado } = response.data.data || response.data; // Tenta pegar de data.data ou direto, por garantia
+      const { relatorio_processado } = response.data.data || response.data;
       setTextoCorrigido(relatorio_processado);
       setMessage('Texto corrigido pela IA!');
     } catch (error) {
@@ -34,6 +79,46 @@ export default function CorrecaoRapida() {
       setMessage('Erro ao corrigir texto. Tente novamente.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLimpar = () => {
+    if (window.confirm('Tem certeza que deseja limpar tudo?')) {
+      setTextoBruto('');
+      setTextoCorrigido('');
+      localStorage.removeItem('correcao_bruto');
+      localStorage.removeItem('correcao_corrigido');
+      setMessage('Tudo limpo!');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  const handleSalvar = async () => {
+    if (!selectedCondominio || !selectedTipo) {
+      setMessage('Selecione o condomínio e o tipo.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await api.post('/ocorrencias', {
+        relatorio_final: textoCorrigido || textoBruto,
+        condominio_id: parseInt(selectedCondominio),
+        ocorrencia_tipo_id: parseInt(selectedTipo),
+        status: 'Registrada',
+        origem: 'app_mobile' // Opcional, para rastreio se o backend suportar
+      });
+      
+      setMessage('Ocorrência salva com sucesso!');
+      setShowSaveModal(false);
+      // Limpar após salvar? Opcional. Vamos manter por segurança.
+      // handleLimpar(); 
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      setMessage('Erro ao salvar ocorrência.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -57,12 +142,65 @@ export default function CorrecaoRapida() {
         <div className="flex-1">
           <h1 className="text-lg font-bold text-gray-900">Correção Mágica ✨</h1>
         </div>
+        <Button variant="ghost" size="sm" onClick={handleLimpar} className="text-red-500 text-xs">
+          Limpar
+        </Button>
       </header>
 
       <main className="flex-1 p-4 flex flex-col gap-4">
         {message && (
           <div className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${message.includes('Erro') ? 'bg-red-50 text-red-800' : 'bg-blue-50 text-blue-800'}`}>
             <CheckCircle className="h-4 w-4" /> {message}
+          </div>
+        )}
+
+        {/* Modal de Salvar */}
+        {showSaveModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl space-y-4">
+              <h3 className="text-lg font-bold">Salvar Ocorrência</h3>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Condomínio</label>
+                <select 
+                  className="w-full p-2 border rounded-lg bg-white"
+                  value={selectedCondominio}
+                  onChange={(e) => setSelectedCondominio(e.target.value)}
+                >
+                  <option value="">Selecione...</option>
+                  {condominios.map(c => (
+                    <option key={c.id} value={c.id}>{c.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tipo</label>
+                <select 
+                  className="w-full p-2 border rounded-lg bg-white"
+                  value={selectedTipo}
+                  onChange={(e) => setSelectedTipo(e.target.value)}
+                >
+                  <option value="">Selecione...</option>
+                  {tipos.map(t => (
+                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="ghost" className="flex-1" onClick={() => setShowSaveModal(false)}>
+                  Cancelar
+                </Button>
+                <Button 
+                  className="flex-1 bg-green-600 text-white" 
+                  onClick={handleSalvar}
+                  isLoading={saving}
+                >
+                  Confirmar
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -77,13 +215,25 @@ export default function CorrecaoRapida() {
             />
         </div>
 
-        <Button 
-            onClick={handleCorrigir} 
-            isLoading={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
-        >
-            <Wand2 className="mr-2 h-4 w-4" /> Corrigir com IA
-        </Button>
+        <div className="grid grid-cols-2 gap-3">
+          <Button 
+              onClick={handleCorrigir} 
+              isLoading={loading}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
+          >
+              <Wand2 className="mr-2 h-4 w-4" /> Corrigir
+          </Button>
+
+          {(textoCorrigido || textoBruto) && (
+             <Button 
+               variant="outline"
+               onClick={() => setShowSaveModal(true)}
+               className="border-green-600 text-green-700 hover:bg-green-50"
+             >
+               Salvar no Sistema
+             </Button>
+          )}
+        </div>
 
         {textoCorrigido && (
             <div className="flex-1 flex flex-col gap-2 mt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
